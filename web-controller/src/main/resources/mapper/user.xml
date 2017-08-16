@@ -1,0 +1,193 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN"   
+    "http://ibatis.apache.org/dtd/sql-map-2.dtd">
+<!-- sqlMap：映射标签
+	namespace：命名空间
+ -->
+<sqlMap namespace="users">
+
+	<!-- 为类起别名，使用的时候比较方便 -->
+	<typeAlias alias="userRequest" type="com.jk.pojo.User"/>
+	<!-- 为类起别名，使用的时候比较方便 -->
+	<typeAlias alias="userResponse" type="com.jk.pojo.User"/>
+	<typeAlias alias="menuRequest" type="com.jk.pojo.menu.MenuRequest"/>
+	<typeAlias alias="menuResponse" type="com.jk.pojo.menu.MenuResponse"/>
+	
+	<!-- 添加用户 -->
+	<insert id="insertUser" parameterClass="userRequest">
+		<selectKey keyProperty="userID" resultClass="int">
+				select SEQ_USERS.nextval from dual
+		</selectKey>
+	
+		insert into t_users
+		(t_uid,t_name,password,userImg,createDate)
+		values
+		(#userID#,#userName#,#userPassword#,#userImg#,#userDate#)
+	</insert>
+	
+	<!-- 查询用户 -->
+	<select id="selectUserList" resultClass="userResponse">
+		<!-- select t_uid as userID, 
+			t_name as userName,
+			password as userPassword,
+			createDate as userDate,
+			userImg as userImg
+			from t_users -->
+			select * from 
+(select t_uid as userID, 
+      t_name as userName,
+      password as userPassword,
+      createDate as userDate,
+			userImg as userImg,
+      rownum r
+			from t_users  
+			where 1=1 
+           	 <isNotEmpty prepend="AND" property="userName" >
+   				  t_name like '%$userName$%'
+			</isNotEmpty>
+   			 
+			)  u
+   where u.r>#start# and u.r <![CDATA[<=]]> #end#
+   
+    
+	</select>
+	<!-- 根据id 查询用户 -->
+	<select id="selectUserById" resultClass="userResponse">
+		select t_uid as userID, 
+			t_name as userName,
+			password as userPassword,
+			createDate as userDate,
+			userImg as userImg
+		from t_users where t_uid = #userID#
+	</select>
+	<!-- 查询总条数 -->
+	<select id="selectUserCount" parameterClass="userRequest" resultClass="java.lang.Integer">
+			select count(1) from t_users
+			where 1=1 
+           	 <isNotEmpty prepend="AND" property="userName" >
+   				 t_name like '%$userName$%'
+			</isNotEmpty>
+			
+	</select>
+	<!-- 根据id修改数据 -->
+	<update id="updateUserInfo" parameterClass="userRequest">
+			update t_users 
+			set t_name = #userName#,
+			password = #userPassword#,
+			createDate = #userDate#,
+			userImg = #userImg# 
+			where 
+			t_uid = #userID#
+	</update>
+	
+	<!-- 批量删除 -->
+	<delete id="delectUserAll" parameterClass="java.lang.String">
+		delete from t_users where t_uid in($ids$)
+	</delete>
+	
+	<!-- 登录验证 -->
+	<select id="loginCheck" parameterClass="userRequest" resultClass="userResponse">
+		select t_uid as userID, 
+			t_name as userName,
+			password as userPassword,
+			createDate as userDate,
+			userImg as userImg,
+			loginfailnum as loginFailNum,
+			(sysdate - loginfaildate) * 24 * 60 * 60 * 1000 as loginFailDate
+		from t_users where t_name = #userName#
+	</select>
+	
+	<!-- 修改登录失败的次数 -->
+	<update id="updateLoginFailNum">
+		update t_users
+		set loginfailnum = loginfailnum + 1,
+		loginfaildate = sysdate
+		where t_name = #userName#
+	</update>
+	<!-- 修改登录失败的次数 -->
+	<update id="setZero">
+		update t_users
+		set loginfailnum = 0
+		where t_name = #userName#
+	</update>
+	
+	<!-- 查询用户角色列表  -->
+	<select id="selectUserRoleListJson" parameterClass="com.jk.pojo.role.RoleRequest" resultClass="com.jk.pojo.role.RoleResponse">
+		select r.t_rid as id,r.t_rname as name,
+		nvl2(rl.t_uid, 1, 0) as checked
+		 from t_roles r left join 
+		 (select * from t_user_role ur where ur.t_uid=#userID#)rl 
+		 on r.t_rid = rl.t_rid 
+	</select>
+	
+	<!-- 删除用户所有的角色 -->
+	<delete id="deleteAllRolesByUserID">
+		delete from t_user_role
+		where t_uid = #userID#
+	</delete>
+	
+	<!-- 添加用户的角色 -->
+	<insert id="insertUserRole">
+		insert into t_user_role
+		(t_rlid, t_uid, t_rid)
+		values
+		(SEQ_U_R.nextval, #userID#, #roleID#)
+	</insert>
+	<!-- 默认用户的角色 -->
+	<insert id="insertUserRoleDefault">
+		insert into t_user_role
+		(t_rlid, t_uid, t_rid)
+		values
+		(SEQ_U_R.nextval, #userID#, #roleID#)
+	</insert>
+	<!-- 递归树 -->
+	<select id="selectTreeListJson" parameterClass="menuRequest" resultClass="java.util.HashMap">
+	 select  m3.t_mid as "id",
+           m3.t_mname as "text",
+           m3.t_url as "url",
+           m3.t_pid as "pid",
+           m3.t_type as menuType
+            from t_menus m3
+     right join (select distinct t_mid from t_m_r m1 
+     right join ( select t_rid from t_user_role where t_uid = #userID#
+           
+          )m2
+       on m1.t_rid = m2.t_rid)m4
+       on m3.t_mid = m4.t_mid
+       where m3.t_pid =#pid#
+       and m3.t_type = 0
+        order by m3.t_mid
+	</select>
+	<!-- 根据用户id查询所拥有的权限 -->
+		<select id="queryAllTreeByUserID" parameterClass="userRequest" resultClass="java.util.HashMap">
+	 select  m3.t_mid as "id",
+           m3.t_mname as "text",
+           m3.t_url as "url",
+           m3.t_pid as "pid"
+            from t_menus m3
+     right join (select distinct t_mid from t_m_r m1 
+     right join ( select t_rid from t_user_role where t_uid = #userID#
+           
+          )m2
+       on m1.t_rid = m2.t_rid)m4
+       on m3.t_mid = m4.t_mid
+        order by m3.t_mid
+	</select>
+	
+	<!-- 上传图片 -->
+	<insert id="insertUserPhoto">
+		insert into t_users_photo
+		(t_photoid, t_md5, t_imgurl)
+		values
+		(SEQ_img.nextval, #md5#, #userImg#)
+	</insert>
+	
+	<!-- 根据MD5码查询数据库中有没有相同数据 -->
+	<select id="queryByMd5" parameterClass="java.lang.String" resultClass="userResponse">
+			select 
+				t_imgurl as userImg
+			from t_users_photo
+			where t_md5 = #md5#
+	</select>
+</sqlMap>

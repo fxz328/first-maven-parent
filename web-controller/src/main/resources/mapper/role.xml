@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN"   
+    "http://ibatis.apache.org/dtd/sql-map-2.dtd">
+<!-- sqlMap：映射标签
+	namespace：命名空间
+ -->
+<sqlMap namespace="role">
+
+	<!-- 为类起别名，使用的时候比较方便 -->
+	<typeAlias alias="roleRequest" type="com.jk.pojo.role.RoleRequest"/>
+	<!-- 为类起别名，使用的时候比较方便 -->
+	<typeAlias alias="roleResponse" type="com.jk.pojo.role.RoleResponse"/>
+	<typeAlias alias="menuRequest" type="com.jk.pojo.menu.MenuRequest"/>
+	<typeAlias alias="menuResponse" type="com.jk.pojo.menu.MenuResponse"/>
+	<select id="queryUserInfo" parameterClass="roleRequest" resultClass="roleResponse">
+			select t_rid as roleID,
+					t_rname as roleName,
+					roledes as roleDesc
+				from t_roles  
+	</select>
+	
+	<select id="selectRoleMenuListJson" parameterClass="menuRequest" resultClass="menuResponse">
+				select m.t_mid as "id", 
+			m.t_mname as "name", 
+			m.t_url as "url", 
+			m.t_pid as "pid", 
+			m.t_type as "type", 
+			nvl2(m1.t_rid, 1, 0) as "checked",
+			m.t_parent as "isParent" 
+		from t_menus m
+		left join (select m2.t_rid, m2.t_mid from t_m_r m2 where m2.t_rid =#roleID#) m1
+		on m.t_mid = m1.t_mid
+		order by m.t_mid
+
+	</select>
+	
+	<delete id="deleteMenuByRoleID">
+			delete from t_m_r where t_rid = #roleID#
+	</delete>
+	
+	<insert id = "insertRoleMenuList">
+			insert into t_m_r
+			(t_id, t_rid, t_mid)
+		values
+			(SEQ_r_m.nextval, #roleID#, #menuID#)
+	</insert>
+</sqlMap>
